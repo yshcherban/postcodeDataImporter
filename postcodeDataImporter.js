@@ -17,7 +17,7 @@ const   hostname                = 'mongodb://127.0.0.1:27017',
 		dbName                  = 'squad-server2-1',
 		postcodeCollectionName  = 'postcodes';
 
-const   fileCsvName             = 'test.csv'; //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
+const   fileCsvName             = 'doogal.csv'; //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
 
 let dbReference;
 
@@ -32,39 +32,29 @@ fileExist(fileCsvName).then( res => {
 			
 			return parse(fileCsvName).then(postcodeArrFromFile => {
 
-				return postcodeCursor.toArray().then(postcodeDataFromDb => {
+				postcodeCursor.each((err, postcodeObj) => {
+					if (postcodeObj != null) {
+						const postcodeId = postcodeObj._id;
+						const postcodeFromDb = postcodeObj.postcodeNoSpaces.toLowerCase();
 
-						const postcodeArrFromDbPromises = postcodeDataFromDb.map(postcodeObj => {
-	                           const postcodeId = postcodeObj._id;
-	                           const postcodeFromDb = postcodeObj.postcodeNoSpaces.toLowerCase();
+						postcodeArrFromFile.map(postcodeArr => {
+							const postcodeFromFile = postcodeArr[0].replace(/\s/g,'').toLowerCase();
+							const countyName = postcodeArr[1];
 
-	                           const postcodeArrFromFilePromises = postcodeArrFromFile.map(postcodeArr => {
-	                            	const postcodeFromFile = postcodeArr[0].replace(/\s/g,'').toLowerCase();
-									const countyName = postcodeArr[1];
-
-									if ((postcodeFromDb === postcodeFromFile) && countyName)
-										return postcodeCollection.update(
-												{ "_id": ObjectId(postcodeId) },
-												{
-													$set: {
-														"county": countyName
-													}
-												}
-											);
-	                            });
-
-	                           return Promise.all(postcodeArrFromFilePromises);
+							if ((postcodeFromDb === postcodeFromFile) && countyName)
+								return postcodeCollection.update(
+									{ "_id": ObjectId(postcodeId) },
+									{ $set: { "county": countyName } }
+								);
 
 						});
+					} else {
+						dbReference.close();
+						console.log('Successfully completed.');
+					}
 
-						
-						return Promise.all(postcodeArrFromDbPromises).then(res => {
-							dbReference.close();
-							console.log('Successfully completed.');
-						});
 				});
-
-
+				
 			}).catch(e => {
 				console.log('Check file contents. File can not be empty!');
 			});
