@@ -17,9 +17,11 @@ const   hostname                = 'mongodb://127.0.0.1:27017',
 		dbName                  = 'squad-server2-1',
 		postcodeCollectionName  = 'postcodes';
 
-const   fileCsvName             = 'doogal.csv'; //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
+const   fileCsvName             = 'postcodes-doog.csv'; //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
 
 let dbReference;
+
+let prepquee = [];
 
 fileExist(fileCsvName).then( res => {
 
@@ -33,6 +35,7 @@ fileExist(fileCsvName).then( res => {
 			return parse(fileCsvName).then(postcodeArrFromFile => {
 
 				postcodeCursor.each((err, postcodeObj) => {
+					
 					if (postcodeObj != null) {
 						const postcodeId = postcodeObj._id;
 						const postcodeFromDb = postcodeObj.postcodeNoSpaces.toLowerCase();
@@ -41,14 +44,21 @@ fileExist(fileCsvName).then( res => {
 							const postcodeFromFile = postcodeArr[0].replace(/\s/g,'').toLowerCase();
 							const countyName = postcodeArr[1];
 
-							if ((postcodeFromDb === postcodeFromFile) && countyName)
-								return postcodeCollection.update(
-									{ "_id": ObjectId(postcodeId) },
-									{ $set: { "county": countyName } }
-								);
-
+							if ((postcodeFromDb === postcodeFromFile) && countyName) {
+								prepquee.push([postcodeId, countyName]);
+							}
+								
 						});
 					} else {
+						console.log('waiting');
+						prepquee.forEach(postcodeArr => {
+							
+							postcodeCollection.update(
+					 			{ "_id": ObjectId(postcodeArr[0]) },
+					 			{ $set: { "county": postcodeArr[1] } }
+							);
+						})
+
 						dbReference.close();
 						console.log('Successfully completed.');
 					}
