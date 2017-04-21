@@ -8,69 +8,40 @@ const   fs          = require('fs'),
 		ObjectId    = require('mongodb').ObjectId,
 		baby        = require('babyparse'),
 		path        = require('path'),
-		mime        = require('mime');
+		mime        = require('mime'),
+		propz		= require('propz');
 
 const   dbConnect           = Promise.promisify(MongoClient.connect),
 		fileExist           = Promise.promisify(fs.stat);
 
-const   hostname                = 'mongodb://127.0.0.1:27017',
-		dbName                  = 'squad-server2-1',
-		postcodeCollectionName  = 'postcodes';
+const   hostname                		= 'mongodb://127.0.0.1:27017',
+		dbName                  		= 'squad-server2-1',
+		inputPostcodeCollectionName		= 'postcodes',
+		outputPostcodeCollectionName	= 'postcodes2';
+
 
 const   fileCsvName             = 'doogal.csv'; //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
 
 let dbReference;
 
-fileExist(fileCsvName).then( res => {
+/**
+ * Searching for provided postcodeNoSpaces in postcodeArray and returning county name if its found
+ * @param {Array.<*>} postcodeArray
+ * @param {String} postcodeNoSpaces
+ * @returns {String|undefined} county found if any
+ */
+function findPostcodeCounty(postcodeArray, postcodeNoSpaces) {
+	postcodeNoSpaces = postcodeNoSpaces.toUpperCase();
+	const foundPostcodeDetails = '';//postcodeArray.find( postcodeItem => {
+	// 	const upperCasedPostcodeFromArray = postcodeItem[0].replace(/\s/g,'').toUpperCase();
+	// 	return postcodeNoSpaces === upperCasedPostcodeFromArray;
+	// });
 
-	if (canParseFile(fileCsvName)) {
 
-		dbConnect(`${hostname}/${dbName}`).then(db => {
-			dbReference = db;
-			const postcodeCollection = db.collection(postcodeCollectionName);
-			const postcodeCursor = postcodeCollection.find();
-			
-			return parse(fileCsvName).then(postcodeArrFromFile => {
-
-				postcodeCursor.each((err, postcodeObj) => {
-					if (postcodeObj != null) {
-						const postcodeId = postcodeObj._id;
-						const postcodeFromDb = postcodeObj.postcodeNoSpaces.toLowerCase();
-
-						postcodeArrFromFile.map(postcodeArr => {
-							const postcodeFromFile = postcodeArr[0].replace(/\s/g,'').toLowerCase();
-							const countyName = postcodeArr[1];
-
-							if ((postcodeFromDb === postcodeFromFile) && countyName)
-								return postcodeCollection.update(
-									{ "_id": ObjectId(postcodeId) },
-									{ $set: { "county": countyName } }
-								);
-
-						});
-					} else {
-						dbReference.close();
-						console.log('Successfully completed.');
-					}
-
-				});
-				
-			}).catch(e => {
-				console.log('Check file contents. File can not be empty!');
-			});
-
-		}).catch(e => {
-			console.log('Can\'t connect to database');
-		})
-
-	} else {
-		console.log("Wrong file type");
-	}
-
-}).catch(e => {
-	console.log('File not found');
-});
-
+	const result = propz.get(foundPostcodeDetails, [1]);
+	console.log('searching for postcode: ' + postcodeNoSpaces + ' found: ' + result);
+	return result;
+}
 
 function parse (file) {
 	return getPromiseFromCSVFile(file).then(result => {
@@ -102,3 +73,42 @@ function getPromiseFromCSVFile (file) {
 		// no return
 	});
 }
+
+async function main() {
+	await fileExist(fileCsvName);
+	if(canParseFile(fileCsvName)) {
+		const db = await dbConnect(`${hostname}/${dbName}`);
+
+		const	inputPostcodeCollection		= db.collection(inputPostcodeCollectionName),
+				outputPostcodeCollection	= db.collection(outputPostcodeCollectionName),
+				inputPostcodeCursor			= inputPostcodeCollection.find();
+
+		const postcodeArrFromFile = await parse(fileCsvName);
+		console.log('Starting..');
+		let promises = [];
+
+		inputPostcodeCursor.forEach(postcodeObj => {
+			const optCounty = findPostcodeCounty(postcodeArrFromFile, postcodeObj.postcodeNoSpaces);
+			console.log(postcodeObj.postcodeNoSpaces);
+			if(optCounty) {
+				const postcodeDataToInsert = Object.assign({}, postcodeObj, { county: optCounty });
+				console.log('data to insert: ' + JSON.stringify(postcodeDataToInsert, null, 2));
+				const insertPromise = outputPostcodeCollection.insertOne(postcodeDataToInsert);
+				insertPromise.then(() => console.log('inserted!'), err => console.log('not inserted: ' + err));
+				promises.push(insertPromise);
+			}
+		}, async () => {
+			await Promise.all(promises);
+			db.close();
+			console.log('Successfully completed.');
+		});
+
+	} else {
+		console.err('Cannot parse file: ' + fileCsvName);
+	}
+}
+
+
+main();
+
+
