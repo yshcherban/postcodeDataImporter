@@ -91,6 +91,31 @@ class PostcodeDirectory {
 	}
 }
 
+class PostcodeDirectory2 {
+	constructor(postcodesArr) {
+		const directory = {};
+		postcodesArr.forEach( postcodeItem => {
+			postcodeItem[0] = postcodeItem[0].replace(/\s/g,'').toUpperCase();
+			const firstLetter = postcodeItem[0].charAt(0);
+			directory[firstLetter] = directory[firstLetter] || [];
+			directory[firstLetter].push(postcodeItem);
+		});
+		this.__directory = directory;
+		this.__length = postcodesArr.length;
+		console.log('directory built');
+	}
+
+	find(postcodeNoSpaces) {
+		const firstLetter = postcodeNoSpaces.charAt(0);
+		const subDirectory = this.__directory[firstLetter] || [];
+		return subDirectory.find( p => p[0] === postcodeNoSpaces );
+	}
+
+	size() {
+		return this.__length;
+	}
+}
+
 async function main() {
 	await fileExist(fileCsvName);
 	if(canParseFile(fileCsvName)) {
@@ -102,7 +127,7 @@ async function main() {
 		const postcodeArrFromFile = await parse(fileCsvName);
 		console.log('Loaded original postcodes');
 
-		const postcodeDirectory = new PostcodeDirectory(postcodeArrFromFile);
+		const postcodeDirectory = new PostcodeDirectory2(postcodeArrFromFile);
 
 		console.log(`Postcode directory built. There are ${postcodeDirectory.size()} items`);
 
