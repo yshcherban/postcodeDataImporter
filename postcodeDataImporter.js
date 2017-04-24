@@ -50,6 +50,25 @@ function getPromiseFromCSVFile (file) {
 	});
 }
 
+
+async function saveCounty(postcodeCollection, postcodeIdFromDb, postcodeFromDb, parsedDataFromFile) {
+
+	for (let data of parsedDataFromFile) {
+		const postcodeFromFile = data[0].replace(/\s/g,'').toUpperCase();
+		const countyName = data[1];
+
+		if ((postcodeFromDb === postcodeFromFile) && countyName) {
+			console.log('Updated');
+			await postcodeCollection.update(
+					{ "_id": postcodeIdFromDb },
+					{ $set: { "county": countyName } }
+				  );
+		}
+	}
+
+}
+
+
 async function main() {
 	try {
 		/** checks file */
@@ -65,21 +84,18 @@ async function main() {
 		for (let doc = await docCollectionArr.next(); doc != null; doc = await docCollectionArr.next()) {
 			const postcodeIdFromDb = doc._id;
 			const postcodeFromDb = doc.postcodeNoSpaces.toUpperCase();
-
 			
-			for (let data of parsedDataFromFile) {
-				const postcodeFromFile = data[0].replace(/\s/g,'').toUpperCase();
-				const countyName = data[1];
-
-				if ((postcodeFromDb === postcodeFromFile) && countyName)
-					await postcodeCollection.update(
-							{ "_id": postcodeIdFromDb },
-							{ $set: { "county": countyName } }
-						  );
-			}
+			console.log('start');
+			//await saveCounty(parsedDataFromFile);
+			await saveCounty(postcodeCollection, postcodeIdFromDb, postcodeFromDb, parsedDataFromFile);
+			console.log('end');
+			
 
 
   		}
+
+  		db.close();
+		console.log('Successfully completed.');
 
 
 	} catch (e) {
