@@ -22,27 +22,6 @@ const   hostname                		= 'mongodb://127.0.0.1:27017',
 
 const   fileCsvName             = 'doogal.csv'; //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
 
-let dbReference;
-
-/**
- * Searching for provided postcodeNoSpaces in postcodeArray and returning county name if its found
- * @param {Array.<*>} postcodeArray
- * @param {String} postcodeNoSpaces
- * @returns {String|undefined} county found if any
- */
-function findPostcodeCounty(postcodeArray, postcodeNoSpaces) {
-	postcodeNoSpaces = postcodeNoSpaces.toUpperCase();
-	const foundPostcodeDetails = '';//postcodeArray.find( postcodeItem => {
-	// 	const upperCasedPostcodeFromArray = postcodeItem[0].replace(/\s/g,'').toUpperCase();
-	// 	return postcodeNoSpaces === upperCasedPostcodeFromArray;
-	// });
-
-
-	const result = propz.get(foundPostcodeDetails, [1]);
-	console.log('searching for postcode: ' + postcodeNoSpaces + ' found: ' + result);
-	return result;
-}
-
 function parse (file) {
 	return getPromiseFromCSVFile(file).then(result => {
 		return result.data || [];
@@ -74,34 +53,64 @@ function getPromiseFromCSVFile (file) {
 	});
 }
 
+async function loadCollectionToArray(collection, displayProgress = true) {
+	const	cursor	= collection.find(),
+			total	= await collection.count();
+
+	let	items		= [],
+		itemsCount	= 0;
+
+	return new Promise( (resolve, reject) => {
+		cursor.forEach( item => {
+			items.push(item);
+			itemsCount++;
+			if(displayProgress && itemsCount % 10000 === 0) {
+				console.log('processed: ' + itemsCount / total * 100 + '%');
+			}
+		}, () => {
+			resolve(items);
+		});
+	});
+}
+
 async function main() {
 	await fileExist(fileCsvName);
 	if(canParseFile(fileCsvName)) {
 		const db = await dbConnect(`${hostname}/${dbName}`);
 
 		const	inputPostcodeCollection		= db.collection(inputPostcodeCollectionName),
-				outputPostcodeCollection	= db.collection(outputPostcodeCollectionName),
-				inputPostcodeCursor			= inputPostcodeCollection.find();
+				outputPostcodeCollection	= db.collection(outputPostcodeCollectionName);
 
 		const postcodeArrFromFile = await parse(fileCsvName);
-		console.log('Starting..');
-		let promises = [];
+		console.log('Loaded original postcodes');
 
-		inputPostcodeCursor.forEach(postcodeObj => {
-			const optCounty = findPostcodeCounty(postcodeArrFromFile, postcodeObj.postcodeNoSpaces);
-			console.log(postcodeObj.postcodeNoSpaces);
-			if(optCounty) {
-				const postcodeDataToInsert = Object.assign({}, postcodeObj, { county: optCounty });
-				console.log('data to insert: ' + JSON.stringify(postcodeDataToInsert, null, 2));
-				const insertPromise = outputPostcodeCollection.insertOne(postcodeDataToInsert);
-				insertPromise.then(() => console.log('inserted!'), err => console.log('not inserted: ' + err));
-				promises.push(insertPromise);
-			}
-		}, async () => {
-			await Promise.all(promises);
-			db.close();
-			console.log('Successfully completed.');
+		const postcodeDirectoryArray = postcodeArrFromFile.map( postcodeItem => {
+			postcodeItem[0] = postcodeItem[0].replace(/\s/g,'').toUpperCase();
+			return postcodeItem;
 		});
+
+		console.log(`Postcode directory built. There are ${postcodeDirectoryArray.length} items`);
+
+		const dbPostcodesArray = await loadCollectionToArray(inputPostcodeCollection);
+		console.log('Mongo collection dumped in memory: ' + dbPostcodesArray.length);
+
+		let processedPostcodesCount = 0,
+			totalPostcodesCount		= dbPostcodesArray.length;
+
+		console.log('Processing postcodes..');
+		dbPostcodesArray.forEach( dbPostcode => {
+			const postcodeNoSpaces			= dbPostcode.postcodeNoSpaces;
+			const foundDirectoryPostcode	= postcodeDirectoryArray.find( p => p[0] === postcodeNoSpaces );
+			if(foundDirectoryPostcode && foundDirectoryPostcode[1]) {
+				dbPostcode.county = foundDirectoryPostcode[1];
+			}
+			processedPostcodesCount++;
+			if(processedPostcodesCount % 100 === 0 ) {
+				console.log('processed: ' + processedPostcodesCount / totalPostcodesCount * 100 + '% ' + processedPostcodesCount );
+			}
+		});
+
+		console.log('Done!');
 
 	} else {
 		console.err('Cannot parse file: ' + fileCsvName);
@@ -110,5 +119,7 @@ async function main() {
 
 
 main();
+
+
 
 
