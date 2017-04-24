@@ -73,6 +73,24 @@ async function loadCollectionToArray(collection, displayProgress = true) {
 	});
 }
 
+class PostcodeDirectory {
+	constructor(postcodesArr) {
+		const postcodeDirectoryArray = postcodesArr.map( postcodeItem => {
+			postcodeItem[0] = postcodeItem[0].replace(/\s/g,'').toUpperCase();
+			return postcodeItem;
+		});
+		this.__postcodeDirectoryArray = postcodeDirectoryArray;
+	}
+
+	find(postcodeNoSpaces) {
+		return this.__postcodeDirectoryArray.find( p => p[0] === postcodeNoSpaces );
+	}
+
+	size() {
+		return this.__postcodeDirectoryArray.length;
+	}
+}
+
 async function main() {
 	await fileExist(fileCsvName);
 	if(canParseFile(fileCsvName)) {
@@ -84,12 +102,9 @@ async function main() {
 		const postcodeArrFromFile = await parse(fileCsvName);
 		console.log('Loaded original postcodes');
 
-		const postcodeDirectoryArray = postcodeArrFromFile.map( postcodeItem => {
-			postcodeItem[0] = postcodeItem[0].replace(/\s/g,'').toUpperCase();
-			return postcodeItem;
-		});
+		const postcodeDirectory = new PostcodeDirectory(postcodeArrFromFile);
 
-		console.log(`Postcode directory built. There are ${postcodeDirectoryArray.length} items`);
+		console.log(`Postcode directory built. There are ${postcodeDirectory.size()} items`);
 
 		const dbPostcodesArray = await loadCollectionToArray(inputPostcodeCollection);
 		console.log('Mongo collection dumped in memory: ' + dbPostcodesArray.length);
@@ -100,7 +115,7 @@ async function main() {
 		console.log('Processing postcodes..');
 		dbPostcodesArray.forEach( dbPostcode => {
 			const postcodeNoSpaces			= dbPostcode.postcodeNoSpaces;
-			const foundDirectoryPostcode	= postcodeDirectoryArray.find( p => p[0] === postcodeNoSpaces );
+			const foundDirectoryPostcode	= postcodeDirectory.find(postcodeNoSpaces);
 			if(foundDirectoryPostcode && foundDirectoryPostcode[1]) {
 				dbPostcode.county = foundDirectoryPostcode[1];
 			}
