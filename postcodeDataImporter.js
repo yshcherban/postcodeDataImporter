@@ -16,7 +16,7 @@ const   dbConnect           	= Promise.promisify(MongoClient.connect),
 		collectionName  		= 'postcodes';
 
 const 	fileExist           	= Promise.promisify(fs.stat),
-		fileCsvName             = 'postcodes-doog.csv'; //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
+		fileCsvName             = 'postcodes-doog.csv'; // postcodes-doog.csv //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
 
 
 function parse (file) {
@@ -77,7 +77,7 @@ async function main() {
 		/** checks db */
 		const db = await dbConnect(`${host}/${dbName}`);
 		const postcodeCollection = db.collection(collectionName);
-		const docCollectionArr = db.collection(collectionName).find();
+		const docCollectionArr = db.collection(collectionName).find().addCursorFlag('noCursorTimeout', true);
 		const parsedDataFromFile = await parse(fileCsvName);
 		
 
