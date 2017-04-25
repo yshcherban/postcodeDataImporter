@@ -13,10 +13,11 @@ const   fs          			= require('fs'),
 const   dbConnect           	= Promise.promisify(MongoClient.connect),
 		host                	= 'mongodb://127.0.0.1:27017',
 		dbName                  = 'squad-server2-1',
-		collectionName  		= 'postcodes';
+		inputCollectionName  	= 'postcodes',
+		outputCollectioName		= 'postcodes2';
 
 const 	fileExist           	= Promise.promisify(fs.stat),
-		fileCsvName             = 'postcodes-doog.csv'; // postcodes-doog.csv //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
+		fileCsvName             = 'National_Statistics_Postcode_Lookup_UK.csv'; // postcodes-doog.csv //'National_Statistics_Postcode_Lookup_UK.csv'; /* Postcode, CountyName */
 
 
 function parse (file) {
@@ -57,11 +58,18 @@ async function main() {
 		if (!canParseFile(fileCsvName)) throw Error('Can\'t parse file');
 		/** checks db */
 		const db = await dbConnect(`${host}/${dbName}`);
-		const postcodeCollection = db.collection(collectionName);
-		const docCollectionArr = db.collection(collectionName).find().addCursorFlag('noCursorTimeout', true);
-		const parsedDataFromFile = await parse(fileCsvName);
 		
+		const originalPostcodeCollection = db.collection(inputCollectionName);
 
+		console.log('cloning postcode collection');
+		const sourcePostcodeCollection = await originalPostcodeCollection.find().toArray();
+		const targetPostcodeCollection = await db.createCollection(outputCollectioName);
+		await targetPostcodeCollection.insert(sourcePostcodeCollection);
+		
+		console.log('Parsing file');
+		const parsedDataFromFile = await parse(fileCsvName);
+		console.log('Loading data from file in database');
+		
 		for (let data of parsedDataFromFile) {
 			const postcodeFromFile = data[0].replace(/\s/g,'').toUpperCase();
 			const countyName = data[1];
@@ -78,8 +86,7 @@ async function main() {
 
   		db.close();
 		console.log('Successfully completed.');
-
-
+		
 	} catch (e) {
 		console.log(e.message);
 	}
